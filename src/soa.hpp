@@ -25,7 +25,8 @@ using SoaVectorSizeType = uint32_t;
 
 #define SOA_SETGET(m_type, m_name) \
 	void set_##m_name(SoaVectorSizeType p_index, const m_type &p_item) { m_name[p_index] = p_item; } \
-	m_type get_##m_name(SoaVectorSizeType p_index) const { return m_name[p_index]; } \
+	m_type get_##m_name(SoaVectorSizeType p_index) { return m_name[p_index]; } \
+	const m_type &get_##m_name(SoaVectorSizeType p_index) const { return m_name[p_index]; }
 
 #define SOA_PUSH(m_type, m_name) \
 	void push_##m_name(const m_type &p_elem) { \
@@ -36,8 +37,10 @@ using SoaVectorSizeType = uint32_t;
 	}
 
 #define SOA_REALLOC(m_type, m_name) \
-	m_name.soa_realloc(memcpy(static_cast<std::byte*>(new_data) + memory_offsets[current_column], m_name.get_data(), starting_capacity * sizeof(m_type))); \
+	m_name.soa_realloc(new_data, memory_offsets[current_column], starting_capacity); \
 	current_column++;
+
+#define SOA_DESTROY(m_type, m_name) m_name.reset();
 
 #define DynamicSOA(m_class_name, m_total_columns, ...) \
 	FOR_EACH_TWO_ARGS(SOA_DYNAMIC_TYPES, __VA_OPT__(__VA_ARGS__, )) \
@@ -77,6 +80,7 @@ public: \
 		FOR_EACH_TWO_ARGS(SOA_INIT, __VA_OPT__(__VA_ARGS__, )) \
 	} \
 	~m_class_name() { \
+		FOR_EACH_TWO_ARGS(SOA_DESTROY, __VA_OPT__(__VA_ARGS__, )) \
 		free(data); \
 	} \
 	FOR_EACH_TWO_ARGS(SOA_SETGET, __VA_OPT__(__VA_ARGS__, )) \
@@ -100,6 +104,7 @@ public: \
 		FOR_EACH_TWO_ARGS(SOA_INIT, __VA_OPT__(__VA_ARGS__, )) \
 	} \
 	~m_class_name() { \
+		FOR_EACH_TWO_ARGS(SOA_DESTROY, __VA_OPT__(__VA_ARGS__, )) \
 		free(data); \
 	} \
 	FOR_EACH_TWO_ARGS(SOA_SETGET, __VA_OPT__(__VA_ARGS__, ))

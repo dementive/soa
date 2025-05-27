@@ -3,6 +3,7 @@
 // Specialized vector for SOA structs. 
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <type_traits>
 
 template <typename T, bool FixedSize, typename U = uint32_t>
@@ -17,12 +18,21 @@ public:
 		if constexpr (!std::is_trivially_constructible_v<T>) {
 			new (&data[count++]) T(p_elem);
 		} else {
-			data[count++] = p_elem;
+			data[count++] = std::move(p_elem);
 		}
 	}
 
-	void soa_realloc(void *p_data) requires(!FixedSize) {
-		data = reinterpret_cast<T*>(static_cast<std::byte*>(p_data));
+	// This can't do a normal realloc, it has to either memcpy or move the bytes otherwise the offsets break.
+	void soa_realloc(void *new_data, int p_memory_offset, int p_starting_capacity) {
+		if constexpr (std::is_trivially_copyable_v<T>) {
+			data = reinterpret_cast<T*>(memcpy(static_cast<std::byte*>(new_data) + p_memory_offset, data, p_starting_capacity * sizeof(int)));
+		} else {
+			T *new_column_data = reinterpret_cast<T*>(static_cast<std::byte*>(new_data) + p_memory_offset);
+			for (int i = 0; i < size(); i++) {
+				new (&new_column_data[i]) T(std::move(data[i]));
+			}
+			data = new_column_data;
+		}
 	}
 
 	void init(void *p_data, U p_size, int p_memory_offset) {
@@ -84,66 +94,77 @@ public:
 		return find(p_val) != -1;
 	}
 
-	struct Iterator {
-		inline T &operator*() const {
-			return *elem_ptr;
-		}
-		inline T *operator->() const { return elem_ptr; }
-		inline Iterator &operator++() {
-			elem_ptr++;
-			return *this;
-		}
-		inline Iterator &operator--() {
-			elem_ptr--;
-			return *this;
-		}
+	// Iterator API (satisfies std::ranges::contiguous_range constraints https://stackoverflow.com/a/75061822)
+	template <bool IsConst> class Iterator {
+	public:
+		using difference_type = std::ptrdiff_t;
+		using value_type = T;
+		using pointer = std::conditional_t<IsConst, const T *, T *>;
+		using reference = std::conditional_t<IsConst, const T &, T &>;
+		using iterator_category = std::contiguous_iterator_tag;
 
-		inline bool operator==(const Iterator &b) const { return elem_ptr == b.elem_ptr; }
-		inline bool operator!=(const Iterator &b) const { return elem_ptr != b.elem_ptr; }
-
-		Iterator(T *p_ptr) { elem_ptr = p_ptr; }
+		Iterator(pointer p_ptr) : elem_ptr(p_ptr) {}
 		Iterator() = default;
-		Iterator(const Iterator &p_it) { elem_ptr = p_it.elem_ptr; }
 
-	private:
-		T *elem_ptr = nullptr;
-	};
+		reference operator*() const { return *elem_ptr; }
+		pointer operator->() const { return elem_ptr; }
 
-	struct ConstIterator {
-		inline const T &operator*() const {
-			return *elem_ptr;
-		}
-		inline const T *operator->() const { return elem_ptr; }
-		inline ConstIterator &operator++() {
-			elem_ptr++;
-			return *this;
-		}
-		inline ConstIterator &operator--() {
-			elem_ptr--;
+		Iterator &operator++() {
+			++elem_ptr;
 			return *this;
 		}
 
-		inline bool operator==(const ConstIterator &b) const { return elem_ptr == b.elem_ptr; }
-		inline bool operator!=(const ConstIterator &b) const { return elem_ptr != b.elem_ptr; }
+		Iterator operator++(int) {
+			Iterator temp = *this;
+			++(*this);
+			return temp;
+		}
 
-		ConstIterator(const T *p_ptr) { elem_ptr = p_ptr; }
-		ConstIterator() = default;
-		ConstIterator(const ConstIterator &p_it) { elem_ptr = p_it.elem_ptr; }
+		Iterator &operator--() {
+			--elem_ptr;
+			return *this;
+		}
+
+		Iterator operator--(int) {
+			Iterator temp = *this;
+			--(*this);
+			return temp;
+		}
+
+		// Random access operations
+		Iterator operator+(const difference_type n) const { return Iterator(elem_ptr + n); }
+		friend Iterator operator+(const difference_type value, const Iterator &other) { return other + value; }
+		Iterator operator-(const difference_type n) const { return Iterator(elem_ptr - n); }
+		difference_type operator-(const Iterator &other) const { return elem_ptr - other.elem_ptr; }
+
+		// Compound assignment
+		Iterator &operator+=(const difference_type n) {
+			elem_ptr += n;
+			return *this;
+		}
+		Iterator &operator-=(const difference_type n) {
+			*this -= n;
+			return *this;
+		}
+
+		// Subscript operator
+		reference operator[](const difference_type n) const requires(IsConst == true) { return *(elem_ptr + n); }
+
+		// Comparison operators
+		bool operator==(const Iterator &other) const { return elem_ptr == other.elem_ptr; }
+		bool operator!=(const Iterator &other) const { return !(*this == other); }
+		bool operator<(const Iterator &other) const { return elem_ptr < other.elem_ptr; }
+		bool operator>(const Iterator &other) const { return elem_ptr > other.elem_ptr; }
+		bool operator<=(const Iterator &other) const { return !(*this > other); }
+		bool operator>=(const Iterator &other) const { return !(*this < other); }
+		constexpr auto operator<=>(Iterator const& rhs) const = default;
 
 	private:
-		const T *elem_ptr = nullptr;
+		pointer elem_ptr = nullptr;
 	};
 
-	inline Iterator begin() { return {data}; }
-	inline Iterator end() { return {data + size()}; }
-
-	inline ConstIterator begin() const { return {ptr()}; }
-	inline ConstIterator end() const { return {ptr() + size()}; }
-
-	inline SoaVector() = default;
-	inline ~SoaVector() {
-		// if (data) {
-		// 	reset();
-		// }
-	}
+	inline Iterator<false> begin() { return Iterator<false>(data); }
+	inline Iterator<false> end() { return Iterator<false>(data + size()); }
+	inline Iterator<true> begin() const { return Iterator<true>(ptr()); }
+	inline Iterator<true> end() const { return Iterator<true>(ptr() + size()); }
 };

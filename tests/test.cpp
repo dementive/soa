@@ -36,8 +36,11 @@ public:
 
 	void set_x(int p_index, const int &p_item) { x[p_index] = p_item; }
 	int get_x(int p_index) const { return x[p_index]; }
+	const int &get_x(int p_index) { return x[p_index]; }
+
 	void set_y(int p_index, const std::string &p_item) { y[p_index] = p_item; }
-	std::string get_y(int p_index) const { return y[p_index]; }
+	std::string get_y(int p_index) { return y[p_index]; }
+	const std::string &get_y(int p_index) const { return y[p_index]; }
 
 	~FixedTestStruct() {
 		x.reset();
@@ -80,23 +83,22 @@ private:
 public:
 	void soa_realloc() {
 		int starting_capacity = soa_capacity;
-	    if (soa_capacity == 0) {
-	        soa_capacity = 1;
-	    } else {
-	        soa_capacity = static_cast<int>(soa_capacity * 1.5);
-	    }
+		if (soa_capacity == 0) {
+			soa_capacity = 1;
+		} else {
+			soa_capacity = static_cast<int>(soa_capacity * 1.5);
+		}
 
-	    // Has to malloc and then memcpy instead of realloc because the offsets break with realloc.
-	    void *new_data = malloc(soa_capacity * total_objects_size);
-	    get_malloc_size(soa_capacity);
-	    int current_column = 0;
+		void *new_data = malloc(soa_capacity * total_objects_size);
+		get_malloc_size(soa_capacity);
+		int current_column = 0;
 
-	    x.soa_realloc(memcpy(static_cast<std::byte*>(new_data) + memory_offsets[current_column], x.get_data(), starting_capacity * sizeof(int)));
-	    current_column++;
-	    y.soa_realloc(memcpy(static_cast<std::byte*>(new_data) + memory_offsets[current_column], y.get_data(), starting_capacity * sizeof(std::string)));
+		x.soa_realloc(new_data, memory_offsets[current_column], starting_capacity);
+		current_column++;
+		y.soa_realloc(new_data, memory_offsets[current_column], starting_capacity);
 
-	    free(data);
-	    data = new_data;
+		free(data);
+		data = new_data;
 	}
 	void init(int p_size) {
 		data = malloc(get_malloc_size(p_size));
@@ -106,11 +108,17 @@ public:
 	}
 
 	void set_x(int p_index, const int &p_item) { x[p_index] = p_item; }
-	int get_x(int p_index) const { return x[p_index]; }
+	int get_x(int p_index) { return x[p_index]; }
+	const int &get_x(int p_index) const { return x[p_index]; }
+
 	void set_y(int p_index, const std::string &p_item) { y[p_index] = p_item; }
-	std::string get_y(int p_index) const { return y[p_index]; }
+
+	std::string get_y(int p_index) { return y[p_index]; }
+	const std::string &get_y(int p_index) const { return y[p_index]; }
 
 	~DynamicTestStruct() {
+		x.reset();
+		y.reset();
 		free(data);
 	}
 
@@ -153,7 +161,7 @@ void test_fixed_sized_macro() {
 		test_macro.set_y(i, "Hello");
 	}
 
-	std::cout << "FixedSizeSOA equality test: " << ((test_macro.get_x(0) == test_macro.get_x(0) and test_macro.get_x(1) == test_macro.get_x(1) and test_macro.get_y(0) == test_macro.get_y(0) and test_macro.get_y(1) == test_macro.get_y(1)) ? "Passed\n" : "Failed.\n");
+	std::cout << "FixedSizeSOA equality test: " << ((test_macro.get_x(0) == test_macro.get_x(0) and test_macro.get_x(1) == test_macro.get_x(1) and test_macro.get_y(0) == test_macro.get_y(0) and test_macro.get_y(1) == test_macro.get_y(1)) ? "Passed\n\n" : "Failed.\n\n");
 }
 
 void test_dynamic_sized_macro() {
@@ -162,7 +170,8 @@ void test_dynamic_sized_macro() {
 
 	for (int i = 0; i < 2; ++i) {
 		test.push_x(i);
-		test.push_y("Hello");
+		std::string hello = std::string(std::to_string(i));
+		test.push_y(hello);
 	}
 
 	// Test dynamic growth
@@ -179,14 +188,16 @@ void test_dynamic_sized_macro() {
 
 	for (int i = 0; i < 2; ++i) {
 		test_macro.push_x(i);
-		test_macro.push_y("Hello");
+		std::string hello = std::string(std::to_string(i));
+		test_macro.push_y(hello);
 	}
 
 	test_macro.push_x(3);
 	test_macro.push_x(9);
+	test_macro.push_y("Hi there!");
 
 	std::cout << "DynamicSizeSOA equality test: " << ((test_macro.get_x(0) == test_macro.get_x(0) and test_macro.get_x(1) == test_macro.get_x(1) and test_macro.get_y(0) == test_macro.get_y(0) and test_macro.get_y(1) == test_macro.get_y(1)) ? "Passed\n" : "Failed.\n");
-	std::cout << "DynamicSizeMacroSOA size test: " << ((test_macro.x.size() == 4 and test_macro.y.size() == 2) ? "Passed\n" : "Failed.\n");
+	std::cout << "DynamicSizeMacroSOA size test: " << ((test_macro.x.size() == 4 and test_macro.y.size() == 3) ? "Passed\n" : "Failed.\n");
 }
 
 int main(int argc, char const *argv[]) {
