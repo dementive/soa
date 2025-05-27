@@ -1,13 +1,14 @@
-#include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <string>
 
 #include "../src/soa.hpp"
 
-struct TestStruct {
-	SoaVector<int> x;
-	SoaVector<std::string> y;
+struct FixedTestStruct {
+	SoaVector<int, true> x;
+	SoaVector<std::string, true> y;
 
+private:
 	void *data{};
 	int memory_offsets[2];
 
@@ -26,6 +27,7 @@ struct TestStruct {
 		return total_size;
 	}
 
+public:
 	void init(int p_size) {
 		data = malloc(get_malloc_size(p_size));
 		x.init(data, p_size, memory_offsets[0]);
@@ -37,34 +39,113 @@ struct TestStruct {
 	void set_y(int p_index, const std::string &p_item) { y[p_index] = p_item; }
 	std::string get_y(int p_index) const { return y[p_index]; }
 
-	~TestStruct() {
+	~FixedTestStruct() {
 		x.reset();
 		y.reset();
 		free(data);
 	}
 };
 
-struct SOAMacroTestStruct {
-	FixedSizeSOA( // This macro expands to the exact same code in TestStruct.
-		SOAMacroTestStruct, 2,
+struct FixedSOAMacroTestStruct {
+	FixedSizeSOA( // This macro expands to the exact same code in FixedTestStruct.
+		FixedSOAMacroTestStruct, 2,
+		int, x,
+		std::string, y
+	)
+};
+
+struct DynamicTestStruct {
+	SoaVector<int, false> x;
+	SoaVector<std::string, false> y;
+private:
+	int memory_offsets[2]{};
+	int total_objects_size{};
+	int soa_capacity = 0;
+	void *data{};
+	int get_malloc_size(const SoaVectorSizeType p_size) {
+		int total_size = 0;
+		int mem_offset_idx = 0;
+		memory_offsets[mem_offset_idx] = total_size;
+		total_size += sizeof(int) * p_size;
+		mem_offset_idx++;
+
+		memory_offsets[mem_offset_idx] = total_size;
+		total_size += sizeof(std::string) * p_size;
+		mem_offset_idx++;
+		
+		total_objects_size = total_size / p_size;
+		return total_size;
+	}
+
+public:
+	void soa_realloc() {
+		int starting_capacity = soa_capacity;
+	    if (soa_capacity == 0) {
+	        soa_capacity = 1;
+	    } else {
+	        soa_capacity = static_cast<int>(soa_capacity * 1.5);
+	    }
+
+	    // Has to malloc and then memcpy instead of realloc because the offsets break with realloc.
+	    void *new_data = malloc(soa_capacity * total_objects_size);
+	    get_malloc_size(soa_capacity);
+	    int current_column = 0;
+
+	    x.soa_realloc(memcpy(static_cast<std::byte*>(new_data) + memory_offsets[current_column], x.get_data(), starting_capacity * sizeof(int)));
+	    current_column++;
+	    y.soa_realloc(memcpy(static_cast<std::byte*>(new_data) + memory_offsets[current_column], y.get_data(), starting_capacity * sizeof(std::string)));
+
+	    free(data);
+	    data = new_data;
+	}
+	void init(int p_size) {
+		data = malloc(get_malloc_size(p_size));
+		soa_capacity = p_size;
+		x.init(data, p_size, memory_offsets[0]);
+		y.init(data, p_size, memory_offsets[1]);
+	}
+
+	void set_x(int p_index, const int &p_item) { x[p_index] = p_item; }
+	int get_x(int p_index) const { return x[p_index]; }
+	void set_y(int p_index, const std::string &p_item) { y[p_index] = p_item; }
+	std::string get_y(int p_index) const { return y[p_index]; }
+
+	~DynamicTestStruct() {
+		free(data);
+	}
+
+	void push_x(const int &p_elem) {
+		if (x.size() == soa_capacity) [[unlikely]] {
+			soa_realloc();
+		}
+		x.push_soa_member(p_elem);
+	}
+
+	void push_y(const std::string &p_elem) {
+		if (y.size() == soa_capacity) [[unlikely]] {
+			soa_realloc();
+		}
+		y.push_soa_member(p_elem);
+	}
+};
+
+struct DynamicSOAMacroTestStruct {
+	DynamicSOA( // This macro expands to the exact same code in DynamicTestStruct.
+		DynamicSOAMacroTestStruct, 2,
 		int, x,
 		std::string, y
 	)
 };
 
 void test_fixed_sized_macro() {
-	TestStruct test;
+	FixedTestStruct test;
 	test.init(2);
 
 	for (int i = 0; i < 2; ++i) {
 		test.set_x(i, i);
 		test.set_y(i, "Hello");
 	}
-
-	std::cout << "1st element: " << test.get_x(0) << ", " << test.get_y(0) << "\n";
-	std::cout << "2nd element: " << test.get_x(1) << ", " << test.get_y(1) << "\n";
-
-	TestStruct test_macro;
+	FixedSOAMacroTestStruct test_macro;
 	test_macro.init(2);
 
 	for (int i = 0; i < 2; ++i) {
@@ -72,12 +153,45 @@ void test_fixed_sized_macro() {
 		test_macro.set_y(i, "Hello");
 	}
 
-	std::cout << "1st element: " << test_macro.get_x(0) << ", " << test_macro.get_y(0) << "\n";
-	std::cout << "2nd element: " << test_macro.get_x(1) << ", " << test_macro.get_y(1) << "\n";
-	std::cout << "FixedSizeSOA equality test: " << ((test_macro.get_x(0) == test.get_x(0) and test_macro.get_x(1) == test.get_x(1) and test_macro.get_y(0) == test.get_y(0) and test_macro.get_y(1) == test.get_y(1)) ? "Passed\n" : "Failed.\n");
+	std::cout << "FixedSizeSOA equality test: " << ((test_macro.get_x(0) == test_macro.get_x(0) and test_macro.get_x(1) == test_macro.get_x(1) and test_macro.get_y(0) == test_macro.get_y(0) and test_macro.get_y(1) == test_macro.get_y(1)) ? "Passed\n" : "Failed.\n");
+}
+
+void test_dynamic_sized_macro() {
+	DynamicTestStruct test;
+	test.init(2);
+
+	for (int i = 0; i < 2; ++i) {
+		test.push_x(i);
+		test.push_y("Hello");
+	}
+
+	// Test dynamic growth
+	test.push_x(3);
+	test.push_x(9);
+	test.push_x(9);
+	test.push_x(9);
+	test.set_x(0, 999);
+
+	std::cout << "DynamicSizeSOA size test: " << ((test.x.size() == 6 and test.y.size() == 2) ? "Passed\n" : "Failed.\n");
+
+	DynamicSOAMacroTestStruct test_macro;
+	test_macro.init(2);
+
+	for (int i = 0; i < 2; ++i) {
+		test_macro.push_x(i);
+		test_macro.push_y("Hello");
+	}
+
+	test_macro.push_x(3);
+	test_macro.push_x(9);
+
+	std::cout << "DynamicSizeSOA equality test: " << ((test_macro.get_x(0) == test_macro.get_x(0) and test_macro.get_x(1) == test_macro.get_x(1) and test_macro.get_y(0) == test_macro.get_y(0) and test_macro.get_y(1) == test_macro.get_y(1)) ? "Passed\n" : "Failed.\n");
+	std::cout << "DynamicSizeMacroSOA size test: " << ((test_macro.x.size() == 4 and test_macro.y.size() == 2) ? "Passed\n" : "Failed.\n");
 }
 
 int main(int argc, char const *argv[]) {
 	test_fixed_sized_macro();
+	test_dynamic_sized_macro();
+	std::cout << "\nTests finished.";
 	return 0;
 }

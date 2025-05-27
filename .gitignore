@@ -1,0 +1,10 @@
+./test
+test
+*.idx
+compile_commands.json
+CMakeFiles/*
+*.cmake
+CMakeCache.txt
+Makefile
+*.os
+*.o

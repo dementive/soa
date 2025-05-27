@@ -5,23 +5,44 @@
 #include <cstdint>
 #include <type_traits>
 
-template <typename T, typename U = uint32_t>
+template <typename T, bool FixedSize, typename U = uint32_t>
 class SoaVector {
 private:
 	U count = 0;
 	T *data = nullptr;
 
 public:
-	void init(void *p_data, U p_size, int memory_offset) {
-	    data = reinterpret_cast<T*>(static_cast<std::byte*>(p_data) + memory_offset);
-	    count = p_size;
+	// Do not use this directly, it has to be public. Use push_X in the SOA struct instead.
+	void push_soa_member(const T &p_elem) requires(!FixedSize) {
+		if constexpr (!std::is_trivially_constructible_v<T>) {
+			new (&data[count++]) T(p_elem);
+		} else {
+			data[count++] = p_elem;
+		}
 	}
 
+	void soa_realloc(void *p_data) requires(!FixedSize) {
+		data = reinterpret_cast<T*>(static_cast<std::byte*>(p_data));
+	}
+
+	void init(void *p_data, U p_size, int p_memory_offset) {
+	    data = reinterpret_cast<T*>(static_cast<std::byte*>(p_data) + p_memory_offset);
+	    if constexpr (FixedSize) {
+	    	count = p_size;
+	    }
+	}
+
+	void *get_data() { return data; }
 	T *ptr() { return data; }
 	const T *ptr() const { return data; }
 
 	inline void clear() {
 		U p_size = 0;
+		if (data == nullptr) {
+			count = p_size;
+			return;
+		}
+
 		if (p_size < count) {
 			if constexpr (!std::is_trivially_destructible_v<T>) {
 				for (U i = p_size; i < count; i++) {
@@ -42,6 +63,7 @@ public:
 	inline bool is_empty() const { return count == 0; }
 
 	inline U size() const { return count; }
+
 	inline const T &operator[](U p_index) const {
 		return data[p_index];
 	}
@@ -49,10 +71,10 @@ public:
 		return data[p_index];
 	}
 
-	int64_t find(const T &p_val, U p_from = 0) const {
+	U find(const T &p_val, U p_from = 0) const {
 		for (U i = p_from; i < count; i++) {
 			if (data[i] == p_val) {
-				return int64_t(i);
+				return i;
 			}
 		}
 		return -1;
@@ -120,8 +142,8 @@ public:
 
 	inline SoaVector() = default;
 	inline ~SoaVector() {
-		if (data) {
-			reset();
-		}
+		// if (data) {
+		// 	reset();
+		// }
 	}
 };
