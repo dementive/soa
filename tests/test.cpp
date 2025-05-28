@@ -1,7 +1,5 @@
 #include "../src/soa.hpp"
 
-#include <cstdint>
-#include <cstdlib>
 #include <iostream>
 #include <string>
 
@@ -30,7 +28,9 @@ private:
 
 public:
 	void init(int p_size) {
-		data = malloc(get_malloc_size(p_size));
+		uint64_t malloc_size = get_malloc_size(p_size);
+		data = malloc(malloc_size);
+		memset(data, 0, malloc_size);
 		x.init(data, p_size, memory_offsets[0]);
 		y.init(data, p_size, memory_offsets[1]);
 	}
@@ -73,7 +73,7 @@ private:
 	uint64_t total_objects_size{};
 	int soa_capacity = 0;
 	void *data{};
-	uint64_t get_malloc_size(const SoaVectorSizeType p_size) {
+	void calc_memory_offsets(const SoaVectorSizeType p_size) {
 		uint64_t total_size = 0;
 		int mem_offset_idx = 0;
 		memory_offsets[mem_offset_idx] = total_size;
@@ -85,7 +85,6 @@ private:
 		mem_offset_idx++;
 
 		total_objects_size = total_size / p_size;
-		return total_size;
 	}
 	void soa_realloc() {
 		const int starting_capacity = soa_capacity;
@@ -95,10 +94,10 @@ private:
 			soa_capacity = static_cast<int>(soa_capacity * 1.5);
 		}
 
-		void *new_data = malloc(soa_capacity * total_objects_size);
-		get_malloc_size(soa_capacity);
-		int current_column = 0;
+		calc_memory_offsets(soa_capacity);
+		void *new_data = calloc(soa_capacity, total_objects_size);
 
+		int current_column = 0;
 		x.soa_realloc(new_data, memory_offsets[current_column], starting_capacity);
 		current_column++;
 		y.soa_realloc(new_data, memory_offsets[current_column], starting_capacity);
@@ -109,7 +108,8 @@ private:
 
 public:
 	void init(int p_size) {
-		data = malloc(get_malloc_size(p_size));
+		calc_memory_offsets(p_size);
+		data = calloc(p_size, total_objects_size);
 		soa_capacity = p_size;
 		x.init(data, p_size, memory_offsets[0]);
 		y.init(data, p_size, memory_offsets[1]);

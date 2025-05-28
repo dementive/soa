@@ -59,8 +59,8 @@ public:
 					data[i].~T();
 				}
 			}
-			count = p_size;
 		}
+		count = p_size;
 	}
 
 	void reset() {
