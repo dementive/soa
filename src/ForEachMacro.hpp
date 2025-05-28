@@ -20,25 +20,10 @@ namespace GC {
 #define EXPAND2(...) EXPAND1(EXPAND1(EXPAND1(EXPAND1(__VA_ARGS__))))
 #define EXPAND1(...) __VA_ARGS__
 
-#define FOR_EACH(macro, ...) __VA_OPT__(EXPAND(FOR_EACH_HELPER(macro, __VA_ARGS__)))
-#define FOR_EACH_HELPER(macro, a1, ...) macro(a1) __VA_OPT__(FOR_EACH_AGAIN PARENS(macro, __VA_ARGS__))
-#define FOR_EACH_AGAIN() FOR_EACH_HELPER
-
 // FOR_EACH with 1 argument but the macro takes 2 arguments
 // Example Usage: FOR_EACH_TWO_ARGS(F, X, __VA_OPT__(__VA_ARGS__,))
 #define FOR_EACH_TWO_ARGS(macro, ...) __VA_OPT__(EXPAND(FOR_EACH_HELPER_TWO_ARGS(macro, __VA_ARGS__)))
 #define FOR_EACH_HELPER_TWO_ARGS(macro, a1, a2, ...) macro(a1, a2) __VA_OPT__(FOR_EACH_AGAIN_TWO_ARGS PARENS(macro, __VA_ARGS__))
 #define FOR_EACH_AGAIN_TWO_ARGS() FOR_EACH_HELPER_TWO_ARGS
-
-// FOR_EACH with 2 arguments but 1 of the arguments is always the same.
-// Example Usage: FOR_EACH_TWO(F, X, __VA_OPT__(__VA_ARGS__,))
-#define FOR_EACH_TWO(macro, a1, ...) __VA_OPT__(EXPAND(FOR_EACH_HELPER_TWO(macro, a1, __VA_ARGS__)))
-#define FOR_EACH_HELPER_TWO(macro, a1, a2, ...) macro(a1, a2) __VA_OPT__(FOR_EACH_AGAIN_TWO PARENS(macro, a1, __VA_ARGS__))
-#define FOR_EACH_AGAIN_TWO() FOR_EACH_HELPER_TWO
-
-// FOR_EACH with 3 arguments but 1 of the arguments is always the same.
-#define FOR_EACH_THREE(macro, a1, ...) __VA_OPT__(EXPAND(FOR_EACH_HELPER_THREE(macro, a1, __VA_ARGS__)))
-#define FOR_EACH_HELPER_THREE(macro, a1, a2, a3, ...) macro(a1, a2, a3) __VA_OPT__(FOR_EACH_AGAIN_THREE PARENS(macro, a1, __VA_ARGS__))
-#define FOR_EACH_AGAIN_THREE() FOR_EACH_HELPER_THREE
 
 } // namespace GC

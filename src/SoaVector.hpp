@@ -1,13 +1,13 @@
 #pragma once
 
-// Specialized vector for SOA structs. 
+// Specialized vector for SOA structs.
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <iterator>
 #include <type_traits>
 
-template <typename T, bool FixedSize, typename U = uint32_t>
-class SoaVector {
+template <typename T, bool FixedSize, typename U = uint32_t> class SoaVector {
 private:
 	U count = 0;
 	T *data = nullptr;
@@ -23,11 +23,11 @@ public:
 	}
 
 	// This can't do a normal realloc, it has to either memcpy or move the bytes otherwise the offsets break.
-	void soa_realloc(void *new_data, int p_memory_offset, int p_starting_capacity) {
+	void soa_realloc(void *new_data, uint64_t p_memory_offset, int p_starting_capacity) {
 		if constexpr (std::is_trivially_copyable_v<T>) {
-			data = reinterpret_cast<T*>(memcpy(static_cast<std::byte*>(new_data) + p_memory_offset, data, p_starting_capacity * sizeof(int)));
+			data = reinterpret_cast<T *>(memcpy(static_cast<std::byte *>(new_data) + p_memory_offset, data, p_starting_capacity * sizeof(int)));
 		} else {
-			T *new_column_data = reinterpret_cast<T*>(static_cast<std::byte*>(new_data) + p_memory_offset);
+			T *new_column_data = reinterpret_cast<T *>(static_cast<std::byte *>(new_data) + p_memory_offset);
 			for (int i = 0; i < size(); i++) {
 				new (&new_column_data[i]) T(std::move(data[i]));
 			}
@@ -35,18 +35,18 @@ public:
 		}
 	}
 
-	void init(void *p_data, U p_size, int p_memory_offset) {
-	    data = reinterpret_cast<T*>(static_cast<std::byte*>(p_data) + p_memory_offset);
-	    if constexpr (FixedSize) {
-	    	count = p_size;
-	    }
+	void init(void *p_data, U p_size, uint64_t p_memory_offset) {
+		data = reinterpret_cast<T *>(static_cast<std::byte *>(p_data) + p_memory_offset);
+		if constexpr (FixedSize) {
+			count = p_size;
+		}
 	}
 
 	void *get_data() { return data; }
 	T *ptr() { return data; }
-	const T *ptr() const { return data; }
+	[[nodiscard]] const T *ptr() const { return data; }
 
-	inline void clear() {
+	void clear() {
 		U p_size = 0;
 		if (data == nullptr) {
 			count = p_size;
@@ -63,25 +63,21 @@ public:
 		}
 	}
 
-	inline void reset() {
+	void reset() {
 		clear();
 		if (data) {
 			data = nullptr;
 		}
 	}
 
-	inline bool is_empty() const { return count == 0; }
+	[[nodiscard]] bool is_empty() const { return count == 0; }
 
-	inline U size() const { return count; }
+	[[nodiscard]] U size() const { return count; }
 
-	inline const T &operator[](U p_index) const {
-		return data[p_index];
-	}
-	inline T &operator[](U p_index) {
-		return data[p_index];
-	}
+	const T &operator[](U p_index) const { return data[p_index]; }
+	T &operator[](U p_index) { return data[p_index]; }
 
-	U find(const T &p_val, U p_from = 0) const {
+	[[nodiscard]] U find(const T &p_val, U p_from = 0) const {
 		for (U i = p_from; i < count; i++) {
 			if (data[i] == p_val) {
 				return i;
@@ -90,9 +86,7 @@ public:
 		return -1;
 	}
 
-	bool has(const T &p_val) const {
-		return find(p_val) != -1;
-	}
+	[[nodiscard]] bool has(const T &p_val) const { return find(p_val) != -1; }
 
 	// Iterator API (satisfies std::ranges::contiguous_range constraints https://stackoverflow.com/a/75061822)
 	template <bool IsConst> class Iterator {
@@ -148,7 +142,7 @@ public:
 		}
 
 		// Subscript operator
-		reference operator[](const difference_type n) const requires(IsConst == true) { return *(elem_ptr + n); }
+		reference operator[](const difference_type n) const requires(IsConst) { return *(elem_ptr + n); }
 
 		// Comparison operators
 		bool operator==(const Iterator &other) const { return elem_ptr == other.elem_ptr; }
@@ -157,14 +151,14 @@ public:
 		bool operator>(const Iterator &other) const { return elem_ptr > other.elem_ptr; }
 		bool operator<=(const Iterator &other) const { return !(*this > other); }
 		bool operator>=(const Iterator &other) const { return !(*this < other); }
-		constexpr auto operator<=>(Iterator const& rhs) const = default;
+		constexpr auto operator<=>(const Iterator &rhs) const = default;
 
 	private:
 		pointer elem_ptr = nullptr;
 	};
 
-	inline Iterator<false> begin() { return Iterator<false>(data); }
-	inline Iterator<false> end() { return Iterator<false>(data + size()); }
-	inline Iterator<true> begin() const { return Iterator<true>(ptr()); }
-	inline Iterator<true> end() const { return Iterator<true>(ptr() + size()); }
+	Iterator<false> begin() { return Iterator<false>(data); }
+	Iterator<false> end() { return Iterator<false>(data + size()); }
+	[[nodiscard]] Iterator<true> begin() const { return Iterator<true>(ptr()); }
+	[[nodiscard]] Iterator<true> end() const { return Iterator<true>(ptr() + size()); }
 };
