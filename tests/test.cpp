@@ -1,4 +1,6 @@
 #include "../src/soa.hpp"
+#include "AoSvsSoA_test.hpp"
+#include "ranges_test.hpp"
 
 #include <iostream>
 #include <string>
@@ -10,8 +12,9 @@ struct FixedTestStruct {
 private:
 	void *data{};
 	uint64_t memory_offsets[2]{};
+	uint64_t total_objects_size{};
 
-	uint64_t get_malloc_size(uint64_t p_size) {
+	void calc_memory_offsets(uint64_t p_size) {
 		uint64_t total_size = 0;
 		int mem_offset_idx = 0;
 
@@ -23,16 +26,22 @@ private:
 		total_size += sizeof(std::string) * p_size;
 		mem_offset_idx++;
 
-		return total_size;
+		total_objects_size = total_size / p_size;
 	}
 
 public:
-	void init(int p_size) {
-		uint64_t malloc_size = get_malloc_size(p_size);
-		data = malloc(malloc_size);
-		memset(data, 0, malloc_size);
+	void init(SoaVectorSizeType p_size) {
+		calc_memory_offsets(p_size);
+		data = calloc(p_size, total_objects_size);
 		x.init(data, p_size, memory_offsets[0]);
 		y.init(data, p_size, memory_offsets[1]);
+
+		// Default construct objects that are not trivially constructible to avoid UB
+		if constexpr (!std::is_trivially_constructible_v<std::string>) {
+			for (SoaVectorSizeType i = 0; i < p_size; ++i) {
+				new (&y[i]) std::string();
+			}
+		}
 	}
 
 	void set_x(int p_index, const int &p_item) { x[p_index] = p_item; }
@@ -71,7 +80,7 @@ struct DynamicTestStruct {
 private:
 	uint64_t memory_offsets[2]{};
 	uint64_t total_objects_size{};
-	int soa_capacity = 0;
+	SoaVectorSizeType soa_capacity = 0;
 	void *data{};
 	void calc_memory_offsets(const SoaVectorSizeType p_size) {
 		uint64_t total_size = 0;
@@ -87,11 +96,11 @@ private:
 		total_objects_size = total_size / p_size;
 	}
 	void soa_realloc() {
-		const int starting_capacity = soa_capacity;
+		const SoaVectorSizeType starting_capacity = soa_capacity;
 		if (soa_capacity == 0) {
 			[[unlikely]] soa_capacity = 1;
 		} else {
-			soa_capacity = static_cast<int>(soa_capacity * 1.5);
+			soa_capacity = static_cast<SoaVectorSizeType>(soa_capacity * 1.5);
 		}
 
 		calc_memory_offsets(soa_capacity);
@@ -225,6 +234,8 @@ void test_dynamic_sized_macro() {
 int main() {
 	test_fixed_sized_macro();
 	test_dynamic_sized_macro();
+	soa_perf_test();
+	soa_ranges_test();
 	std::cout << "\nTests finished.";
 	return 0;
 }

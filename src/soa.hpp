@@ -34,6 +34,13 @@ using SoaVectorSizeType = uint32_t;
 		m_name.push_soa_member(p_elem);                                                                                                                                                      \
 	}
 
+#define SOA_DEFAULT_CONSTRUCT(m_type, m_name)                                                                                                                                                \
+	if constexpr (!std::is_trivially_constructible_v<m_type>) {                                                                                                                              \
+		for (SoaVectorSizeType i = 0; i < p_size; ++i) {                                                                                                                                     \
+			new (&m_name[i]) m_type();                                                                                                                                                       \
+		}                                                                                                                                                                                    \
+	}
+
 #define SOA_REALLOC(m_type, m_name)                                                                                                                                                          \
 	m_name.soa_realloc(new_data, memory_offsets[current_column], starting_capacity);                                                                                                         \
 	current_column++;
@@ -46,7 +53,7 @@ private:                                                                        
 	uint64_t memory_offsets[m_total_columns]{};                                                                                                                                              \
 	uint64_t total_objects_size{};                                                                                                                                                           \
 	void *data{};                                                                                                                                                                            \
-	int soa_capacity = 0;                                                                                                                                                                    \
+	SoaVectorSizeType soa_capacity = 0;                                                                                                                                                      \
 	void calc_memory_offsets(const SoaVectorSizeType p_size) {                                                                                                                               \
 		uint64_t total_size = 0;                                                                                                                                                             \
 		int mem_offset_idx = 0;                                                                                                                                                              \
@@ -54,11 +61,11 @@ private:                                                                        
 		total_objects_size = total_size / p_size;                                                                                                                                            \
 	}                                                                                                                                                                                        \
 	void soa_realloc() {                                                                                                                                                                     \
-		const int starting_capacity = soa_capacity;                                                                                                                                          \
+		const SoaVectorSizeType starting_capacity = soa_capacity;                                                                                                                            \
 		if (soa_capacity == 0) [[unlikely]] {                                                                                                                                                \
 			soa_capacity = 1;                                                                                                                                                                \
 		} else {                                                                                                                                                                             \
-			soa_capacity = static_cast<int>(soa_capacity * 1.5);                                                                                                                             \
+			soa_capacity = soa_capacity * 1.5;                                                                                                                                               \
 		}                                                                                                                                                                                    \
                                                                                                                                                                                              \
 		calc_memory_offsets(soa_capacity);                                                                                                                                                   \
@@ -76,6 +83,7 @@ public:                                                                         
 		soa_capacity = p_size;                                                                                                                                                               \
 		int current_column = 0;                                                                                                                                                              \
 		FOR_EACH_TWO_ARGS(SOA_INIT, __VA_OPT__(__VA_ARGS__, ))                                                                                                                               \
+		FOR_EACH_TWO_ARGS(SOA_DEFAULT_CONSTRUCT, __VA_OPT__(__VA_ARGS__, ))                                                                                                                  \
 	}                                                                                                                                                                                        \
 	~m_class_name() {                                                                                                                                                                        \
 		if (data) {                                                                                                                                                                          \
@@ -113,6 +121,7 @@ public:                                                                         
 		data = calloc(p_size, total_objects_size);                                                                                                                                           \
 		int current_column = 0;                                                                                                                                                              \
 		FOR_EACH_TWO_ARGS(SOA_INIT, __VA_OPT__(__VA_ARGS__, ))                                                                                                                               \
+		FOR_EACH_TWO_ARGS(SOA_DEFAULT_CONSTRUCT, __VA_OPT__(__VA_ARGS__, ))                                                                                                                  \
 	}                                                                                                                                                                                        \
 	~m_class_name() {                                                                                                                                                                        \
 		if (data) {                                                                                                                                                                          \

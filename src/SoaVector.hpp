@@ -1,16 +1,25 @@
 #pragma once
 
-// Specialized vector for SOA structs.
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <iterator>
+#include <memory>
 #include <type_traits>
 
+// Specialized vector for SOA structs.
 template <typename T, bool FixedSize, typename U = uint32_t> class SoaVector {
 private:
 	U count = 0;
 	T *data = nullptr;
+
+	T *align_ptr(void *p_data, U p_size, uint64_t p_memory_offset) {
+		// Has to be aligned to avoid UB: https://lesleylai.info/en/std-align/
+		void *offset_data = static_cast<std::byte *>(p_data) + p_memory_offset;
+		size_t space = p_size * sizeof(T);
+		void *aligned_pointer = std::align(alignof(T), sizeof(T), offset_data, space);
+		return reinterpret_cast<T *>(aligned_pointer);
+	}
 
 public:
 	// Do not use this directly, it has to be public. Use push_X in the SOA struct instead.
@@ -23,12 +32,12 @@ public:
 	}
 
 	// This can't do a normal realloc, it has to either memcpy or move the bytes otherwise the offsets break.
-	void soa_realloc(void *new_data, uint64_t p_memory_offset, int p_starting_capacity) {
+	void soa_realloc(void *new_data, uint64_t p_memory_offset, U p_new_capacity) {
 		if constexpr (std::is_trivially_copyable_v<T>) {
-			data = reinterpret_cast<T *>(memcpy(static_cast<std::byte *>(new_data) + p_memory_offset, data, p_starting_capacity * sizeof(int)));
+			data = reinterpret_cast<T *>(memcpy(static_cast<std::byte *>(new_data) + p_memory_offset, data, p_new_capacity * sizeof(T)));
 		} else {
-			T *new_column_data = reinterpret_cast<T *>(static_cast<std::byte *>(new_data) + p_memory_offset);
-			for (int i = 0; i < size(); i++) {
+			T *new_column_data = align_ptr(new_data, p_new_capacity, p_memory_offset);
+			for (U i = 0; i < size(); i++) {
 				new (&new_column_data[i]) T(std::move(data[i]));
 			}
 			data = new_column_data;
@@ -36,7 +45,7 @@ public:
 	}
 
 	void init(void *p_data, U p_size, uint64_t p_memory_offset) {
-		data = reinterpret_cast<T *>(static_cast<std::byte *>(p_data) + p_memory_offset);
+		data = align_ptr(p_data, p_size, p_memory_offset);
 		if constexpr (FixedSize) {
 			count = p_size;
 		}
@@ -92,10 +101,10 @@ public:
 	template <bool IsConst> class Iterator {
 	public:
 		using difference_type = std::ptrdiff_t;
-		using value_type = T;
+		using element_type = T;
 		using pointer = std::conditional_t<IsConst, const T *, T *>;
 		using reference = std::conditional_t<IsConst, const T &, T &>;
-		using iterator_category = std::contiguous_iterator_tag;
+		using iterator_concept = std::contiguous_iterator_tag;
 
 		Iterator(pointer p_ptr) : elem_ptr(p_ptr) {}
 		Iterator() = default;
@@ -137,12 +146,12 @@ public:
 			return *this;
 		}
 		Iterator &operator-=(const difference_type n) {
-			*this -= n;
+			elem_ptr -= n;
 			return *this;
 		}
 
 		// Subscript operator
-		reference operator[](const difference_type n) const requires(IsConst) { return *(elem_ptr + n); }
+		reference operator[](const difference_type n) const { return *(elem_ptr + n); }
 
 		// Comparison operators
 		bool operator==(const Iterator &other) const { return elem_ptr == other.elem_ptr; }
