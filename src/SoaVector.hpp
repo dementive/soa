@@ -25,6 +25,7 @@ private:
 
 public:
 	// Do not use this directly, it has to be public. Use push_X in the SOA struct instead.
+	// Invalidates pointers if additional memory is needed.
 	void push_soa_member(const T &p_elem) requires(!FixedSize) {
 		if constexpr (!std::is_trivially_constructible_v<T>) {
 			new (&data[count++]) T(p_elem);
@@ -53,7 +54,7 @@ public:
 			data = align_ptr(p_data, p_size, p_memory_offset);
 		}
 		if constexpr (FixedSize) {
-			count = p_size;
+			count = p_size; // for dynamic Vectors count updates when you push_back
 		}
 	}
 

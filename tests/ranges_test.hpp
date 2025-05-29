@@ -50,7 +50,7 @@ inline void soa_ranges_test() {
 	TEST("Zip: ", std::get<0>(fifth_row) == 4 and std::get<1>(fifth_row) == 8)
 
 	// have to use ranges::to to sort (or modify in any way) a subrange otherwise it will modify the original data.
-	auto subrange_test = std::ranges::subrange(zip_test.begin(), zip_test.end()) | ranges::to<std::vector<std::tuple<int, int>>>();
+	auto subrange_test = ranges::subrange(zip_test.begin(), zip_test.end()) | ranges::to<std::vector<std::tuple<int, int>>>();
 	ranges::sort(subrange_test, std::greater());
 	auto first_sorted_pair = subrange_test[0];
 	TEST("Sorting subrange: ", std::get<0>(first_sorted_pair) == 4 and std::get<1>(first_sorted_pair) == 8)
