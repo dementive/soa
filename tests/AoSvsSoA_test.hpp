@@ -23,14 +23,14 @@ struct SoaPerfTestStruct {
 };
 
 struct AosPerfTestStruct {
-	int a;
+	int a{};
 	Vector2 b;
 	Vector2 c;
 	Vector2 d;
 	Vector2 e;
 	Vector2 f;
-	int g;
-	int h;
+	int g{};
+	int h{};
 };
 
 template <typename Func> auto measure_time(Func func) {
@@ -41,12 +41,12 @@ template <typename Func> auto measure_time(Func func) {
 }
 
 inline int soa_perf_test() {
-	const int size = 1000000;
+	const int size = 10000;
 	SoaPerfTestStruct soa_struct{};
 	soa_struct.init(size);
 
 	int add = 0;
-	double soa_fill_time = measure_time([&]() {
+	const double soa_fill_time = measure_time([&]() {
 		for (int i = 0; i < size; ++i) {
 			soa_struct.set_a(i, i);
 			soa_struct.set_b(i, Vector2());
@@ -62,7 +62,7 @@ inline int soa_perf_test() {
 
 	std::vector<AosPerfTestStruct> aos_arr(size);
 	int add2 = 0;
-	double aos_fill_time = measure_time([&]() {
+	const double aos_fill_time = measure_time([&]() {
 		for (int i = 0; i < size; ++i) {
 			AosPerfTestStruct aos_struct{};
 			aos_struct.a = i;
@@ -81,14 +81,14 @@ inline int soa_perf_test() {
 	soa_struct.clear();
 	aos_arr.clear();
 	soa_struct.init(size);
-	double soa_fill_2_members_time = measure_time([&]() {
+	const double soa_fill_2_members_time = measure_time([&]() {
 		for (int i = 0; i < size; ++i) {
 			soa_struct.set_a(i, i);
 		}
 	});
 	std::cout << "SOA set 1 member time: " << soa_fill_2_members_time << " ms\n";
 
-	double aos_fill_2_members_time = measure_time([&]() {
+	const double aos_fill_2_members_time = measure_time([&]() {
 		for (int i = 0; i < size; ++i) {
 			aos_arr[i].a = i;
 		}
@@ -97,7 +97,7 @@ inline int soa_perf_test() {
 
 	uint64_t soa_sum_a = 0;
 
-	double soa_access_time = measure_time([&]() {
+	const double soa_access_time = measure_time([&]() {
 		for (int i = 0; i < size; ++i) {
 			soa_sum_a += soa_struct.a[i];
 		}
@@ -105,7 +105,7 @@ inline int soa_perf_test() {
 	std::cout << "SOA sum time: " << soa_access_time << " ms\n";
 
 	uint64_t aos_sum_a = 0;
-	double aos_access_time = measure_time([&]() {
+	const double aos_access_time = measure_time([&]() {
 		for (int i = 0; i < size; ++i) {
 			aos_sum_a += aos_arr[i].a;
 		}

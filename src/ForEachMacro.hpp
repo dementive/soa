@@ -9,8 +9,6 @@
 	Note that this will only work with C++20 or a newer version because of __VA_OPT__
 */
 
-namespace GC {
-
 #define PARENS ()
 #define PAIR(first, second) first, second
 
@@ -25,5 +23,3 @@ namespace GC {
 #define FOR_EACH_TWO_ARGS(macro, ...) __VA_OPT__(EXPAND(FOR_EACH_HELPER_TWO_ARGS(macro, __VA_ARGS__)))
 #define FOR_EACH_HELPER_TWO_ARGS(macro, a1, a2, ...) macro(a1, a2) __VA_OPT__(FOR_EACH_AGAIN_TWO_ARGS PARENS(macro, __VA_ARGS__))
 #define FOR_EACH_AGAIN_TWO_ARGS() FOR_EACH_HELPER_TWO_ARGS
-
-} // namespace GC

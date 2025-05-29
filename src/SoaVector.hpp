@@ -7,8 +7,10 @@
 #include <memory>
 #include <type_traits>
 
+using SoaVectorSizeType = uint32_t;
+
 // Specialized vector for SOA structs.
-template <typename T, bool FixedSize, typename U = uint32_t> class SoaVector {
+template <typename T, bool FixedSize, typename U = SoaVectorSizeType> class SoaVector {
 private:
 	U count = 0;
 	T *data = nullptr;
@@ -32,7 +34,7 @@ public:
 	}
 
 	// This can't do a normal realloc, it has to either memcpy or move the bytes otherwise the offsets break.
-	void soa_realloc(void *new_data, uint64_t p_memory_offset, U p_new_capacity) {
+	void soa_realloc(void *new_data, uint64_t p_memory_offset, U p_new_capacity) requires(!FixedSize) {
 		if constexpr (std::is_trivially_copyable_v<T>) {
 			data = reinterpret_cast<T *>(memcpy(static_cast<std::byte *>(new_data) + p_memory_offset, data, p_new_capacity * sizeof(T)));
 		} else {
@@ -45,7 +47,11 @@ public:
 	}
 
 	void init(void *p_data, U p_size, uint64_t p_memory_offset) {
-		data = align_ptr(p_data, p_size, p_memory_offset);
+		if constexpr (std::is_trivially_constructible_v<T>) {
+			data = reinterpret_cast<T *>(static_cast<std::byte *>(p_data) + p_memory_offset);
+		} else {
+			data = align_ptr(p_data, p_size, p_memory_offset);
+		}
 		if constexpr (FixedSize) {
 			count = p_size;
 		}

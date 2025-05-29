@@ -11,12 +11,12 @@ struct FixedTestStruct {
 
 private:
 	void *data{};
-	uint64_t memory_offsets[2]{};
-	uint64_t total_objects_size{};
 
-	void calc_memory_offsets(uint64_t p_size) {
+public:
+	void init(SoaVectorSizeType p_size) {
 		uint64_t total_size = 0;
 		int mem_offset_idx = 0;
+		uint64_t memory_offsets[2];
 
 		memory_offsets[mem_offset_idx] = total_size;
 		total_size += sizeof(int) * p_size;
@@ -24,15 +24,8 @@ private:
 
 		memory_offsets[mem_offset_idx] = total_size;
 		total_size += sizeof(std::string) * p_size;
-		mem_offset_idx++;
 
-		total_objects_size = total_size / p_size;
-	}
-
-public:
-	void init(SoaVectorSizeType p_size) {
-		calc_memory_offsets(p_size);
-		data = calloc(p_size, total_objects_size);
+		data = calloc(p_size, total_size / p_size);
 		x.init(data, p_size, memory_offsets[0]);
 		y.init(data, p_size, memory_offsets[1]);
 
@@ -73,38 +66,39 @@ struct FixedSOAMacroTestStruct {
 	)
 };
 
+struct TestVecStruct {
+	DynamicSOA(
+		TestVecStruct, 4,
+		int, x,
+		std::string, y,
+		std::vector<std::string>, z,
+		std::vector<int>, a
+	)
+};
+
 struct DynamicTestStruct {
 	SoaVector<int, false> x;
 	SoaVector<std::string, false> y;
 
 private:
-	uint64_t memory_offsets[2]{};
-	uint64_t total_objects_size{};
 	SoaVectorSizeType soa_capacity = 0;
 	void *data{};
-	void calc_memory_offsets(const SoaVectorSizeType p_size) {
+	void soa_realloc() {
+		const SoaVectorSizeType starting_capacity = soa_capacity;
+		soa_capacity = static_cast<SoaVectorSizeType>(soa_capacity * 1.5);
+		const SoaVectorSizeType p_size = soa_capacity;
+
 		uint64_t total_size = 0;
 		int mem_offset_idx = 0;
+		uint64_t memory_offsets[2];
+
 		memory_offsets[mem_offset_idx] = total_size;
 		total_size += sizeof(int) * p_size;
 		mem_offset_idx++;
 
 		memory_offsets[mem_offset_idx] = total_size;
 		total_size += sizeof(std::string) * p_size;
-		mem_offset_idx++;
-
-		total_objects_size = total_size / p_size;
-	}
-	void soa_realloc() {
-		const SoaVectorSizeType starting_capacity = soa_capacity;
-		if (soa_capacity == 0) {
-			[[unlikely]] soa_capacity = 1;
-		} else {
-			soa_capacity = static_cast<SoaVectorSizeType>(soa_capacity * 1.5);
-		}
-
-		calc_memory_offsets(soa_capacity);
-		void *new_data = calloc(soa_capacity, total_objects_size);
+		void *new_data = calloc(soa_capacity, total_size / p_size);
 
 		int current_column = 0;
 		x.soa_realloc(new_data, memory_offsets[current_column], starting_capacity);
@@ -117,8 +111,18 @@ private:
 
 public:
 	void init(int p_size) {
-		calc_memory_offsets(p_size);
-		data = calloc(p_size, total_objects_size);
+		uint64_t total_size = 0;
+		int mem_offset_idx = 0;
+		uint64_t memory_offsets[2];
+
+		memory_offsets[mem_offset_idx] = total_size;
+		total_size += sizeof(int) * p_size;
+		mem_offset_idx++;
+
+		memory_offsets[mem_offset_idx] = total_size;
+		total_size += sizeof(std::string) * p_size;
+
+		data = calloc(p_size, total_size / p_size);
 		soa_capacity = p_size;
 		x.init(data, p_size, memory_offsets[0]);
 		y.init(data, p_size, memory_offsets[1]);
@@ -229,6 +233,28 @@ void test_dynamic_sized_macro() {
 								 ? "Passed\n"
 								 : "Failed.\n");
 	std::cout << "DynamicSizeMacroSOA size test: " << ((test_macro.x.size() == 4 and test_macro.y.size() == 3) ? "Passed\n" : "Failed.\n");
+
+	TestVecStruct vec_test;
+	vec_test.init(2);
+	for (int i = 0; i < 2; ++i) {
+		vec_test.push_x(i);
+		const std::string hello = std::string(std::to_string(i));
+		vec_test.push_y(hello);
+
+		std::vector<std::string> strings{ hello, hello };
+		vec_test.push_z(strings);
+
+		std::vector<int> ints{ i, 5 };
+		vec_test.push_a(ints);
+	}
+
+	vec_test.push_x(3);
+	vec_test.push_x(9);
+	vec_test.push_x(9);
+	vec_test.push_x(9);
+	vec_test.set_x(0, 999);
+
+	std::cout << "DynamicSizeSOA with vector: " << ((vec_test.get_a(0).at(1) == 5) ? "Passed\n" : "Failed.\n");
 }
 
 int main() {

@@ -3,8 +3,6 @@
 #include "ForEachMacro.hpp"
 #include "SoaVector.hpp"
 
-using SoaVectorSizeType = uint32_t;
-
 #define SOA_FIXED_VECTOR_TYPE(m_type) SoaVector<m_type, true, SoaVectorSizeType>
 #define SOA_DYNAMIC_VECTOR_TYPE(m_type) SoaVector<m_type, false, SoaVectorSizeType>
 
@@ -50,26 +48,19 @@ using SoaVectorSizeType = uint32_t;
 #define DynamicSOA(m_class_name, m_total_columns, ...)                                                                                                                                       \
 	FOR_EACH_TWO_ARGS(SOA_DYNAMIC_TYPES, __VA_OPT__(__VA_ARGS__, ))                                                                                                                          \
 private:                                                                                                                                                                                     \
-	uint64_t memory_offsets[m_total_columns]{};                                                                                                                                              \
-	uint64_t total_objects_size{};                                                                                                                                                           \
 	void *data{};                                                                                                                                                                            \
 	SoaVectorSizeType soa_capacity = 0;                                                                                                                                                      \
-	void calc_memory_offsets(const SoaVectorSizeType p_size) {                                                                                                                               \
-		uint64_t total_size = 0;                                                                                                                                                             \
-		int mem_offset_idx = 0;                                                                                                                                                              \
-		FOR_EACH_TWO_ARGS(SOA_GET_MALLOC_SIZE, __VA_OPT__(__VA_ARGS__, ))                                                                                                                    \
-		total_objects_size = total_size / p_size;                                                                                                                                            \
-	}                                                                                                                                                                                        \
 	void soa_realloc() {                                                                                                                                                                     \
 		const SoaVectorSizeType starting_capacity = soa_capacity;                                                                                                                            \
-		if (soa_capacity == 0) [[unlikely]] {                                                                                                                                                \
-			soa_capacity = 1;                                                                                                                                                                \
-		} else {                                                                                                                                                                             \
-			soa_capacity = soa_capacity * 1.5;                                                                                                                                               \
-		}                                                                                                                                                                                    \
+		soa_capacity = static_cast<SoaVectorSizeType>(soa_capacity * 1.5);                                                                                                                   \
+		const SoaVectorSizeType p_size = soa_capacity;                                                                                                                                       \
                                                                                                                                                                                              \
-		calc_memory_offsets(soa_capacity);                                                                                                                                                   \
-		void *new_data = calloc(soa_capacity, total_objects_size);                                                                                                                           \
+		uint64_t total_size = 0;                                                                                                                                                             \
+		int mem_offset_idx = 0;                                                                                                                                                              \
+		uint64_t memory_offsets[m_total_columns];                                                                                                                                            \
+		FOR_EACH_TWO_ARGS(SOA_GET_MALLOC_SIZE, __VA_OPT__(__VA_ARGS__, ))                                                                                                                    \
+                                                                                                                                                                                             \
+		void *new_data = calloc(soa_capacity, total_size / p_size);                                                                                                                          \
 		int current_column = 0;                                                                                                                                                              \
 		FOR_EACH_TWO_ARGS(SOA_REALLOC, __VA_OPT__(__VA_ARGS__, ))                                                                                                                            \
 		free(data);                                                                                                                                                                          \
@@ -78,8 +69,11 @@ private:                                                                        
                                                                                                                                                                                              \
 public:                                                                                                                                                                                      \
 	void init(const SoaVectorSizeType p_size) {                                                                                                                                              \
-		calc_memory_offsets(p_size);                                                                                                                                                         \
-		data = calloc(p_size, total_objects_size);                                                                                                                                           \
+		uint64_t total_size = 0;                                                                                                                                                             \
+		int mem_offset_idx = 0;                                                                                                                                                              \
+		uint64_t memory_offsets[m_total_columns];                                                                                                                                            \
+		FOR_EACH_TWO_ARGS(SOA_GET_MALLOC_SIZE, __VA_OPT__(__VA_ARGS__, ))                                                                                                                    \
+		data = calloc(p_size, total_size / p_size);                                                                                                                                          \
 		soa_capacity = p_size;                                                                                                                                                               \
 		int current_column = 0;                                                                                                                                                              \
 		FOR_EACH_TWO_ARGS(SOA_INIT, __VA_OPT__(__VA_ARGS__, ))                                                                                                                               \
@@ -105,20 +99,15 @@ public:                                                                         
 #define FixedSizeSOA(m_class_name, m_total_columns, ...)                                                                                                                                     \
 	FOR_EACH_TWO_ARGS(SOA_FIXED_TYPES, __VA_OPT__(__VA_ARGS__, ))                                                                                                                            \
 private:                                                                                                                                                                                     \
-	uint64_t memory_offsets[m_total_columns]{};                                                                                                                                              \
 	void *data{};                                                                                                                                                                            \
-	uint64_t total_objects_size{};                                                                                                                                                           \
-	void calc_memory_offsets(const SoaVectorSizeType p_size) {                                                                                                                               \
-		uint64_t total_size = 0;                                                                                                                                                             \
-		int mem_offset_idx = 0;                                                                                                                                                              \
-		FOR_EACH_TWO_ARGS(SOA_GET_MALLOC_SIZE, __VA_OPT__(__VA_ARGS__, ))                                                                                                                    \
-		total_objects_size = total_size / p_size;                                                                                                                                            \
-	}                                                                                                                                                                                        \
                                                                                                                                                                                              \
 public:                                                                                                                                                                                      \
 	void init(const SoaVectorSizeType p_size) {                                                                                                                                              \
-		calc_memory_offsets(p_size);                                                                                                                                                         \
-		data = calloc(p_size, total_objects_size);                                                                                                                                           \
+		uint64_t total_size = 0;                                                                                                                                                             \
+		int mem_offset_idx = 0;                                                                                                                                                              \
+		uint64_t memory_offsets[m_total_columns];                                                                                                                                            \
+		FOR_EACH_TWO_ARGS(SOA_GET_MALLOC_SIZE, __VA_OPT__(__VA_ARGS__, ))                                                                                                                    \
+		data = calloc(p_size, total_size / p_size);                                                                                                                                          \
 		int current_column = 0;                                                                                                                                                              \
 		FOR_EACH_TWO_ARGS(SOA_INIT, __VA_OPT__(__VA_ARGS__, ))                                                                                                                               \
 		FOR_EACH_TWO_ARGS(SOA_DEFAULT_CONSTRUCT, __VA_OPT__(__VA_ARGS__, ))                                                                                                                  \
