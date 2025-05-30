@@ -175,6 +175,7 @@ UseTab:          Always
 WhitespaceSensitiveMacros:
   - DynamicSOA
   - FixedSizeSOA
+  - MutableSOA
 ---
 ### C++ specific config ###
 Language:        Cpp

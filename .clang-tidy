@@ -8,7 +8,7 @@ clang-analyzer-*,-clang-analyzer-osx*,bugprone-*,concurrency-*,cppcoreguidelines
 -misc-non-private-member-variables-in-classes,-cppcoreguidelines-non-private-member-variables-in-classes,
 -cppcoreguidelines-avoid-magic-numbers,-readability-magic-numbers,
 -cppcoreguidelines-avoid-c-arrays,-modernize-avoid-c-arrays,-cppcoreguidelines-pro-bounds-constant-array-index,
--misc-include-cleaner
+-misc-include-cleaner,-bugprone-easily-swappable-parameters
 '
 FormatStyle: file
 HeaderFilterRegex: (src)/
