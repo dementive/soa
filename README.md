@@ -54,11 +54,13 @@ The core idea behind the macros is to send the type and name of every class memb
 One of the big problems with using Soa data layout in general is that since each member is a vector to do the same thing as with Aos you have to do a lot more memory allocations as each member would get allocated seperately. To prevent this each Soa struct you declare will manage the memory of all of it's members, this is done by having each member stored in a specialized [SoaVector](https://github.com/dementive/soa/blob/main/src/SoaVector.hpp) container that does mostly the same things as std::vector but it does not manage it's own memory. This way only 1 allocation is ever made each time initilization or reallocation happens instead of 1 for each vector.
 
 
-There are 2 different macros you can use to create your Soa structs: FixedSizeSOA and DynamicSOA.
+There are 3 different macros you can use to create your Soa structs: FixedSizeSOA, DynamicSOA, and MutableSOA.
 
 The FixedSizeSOA is...fixed size, it is for things that the size is not known at compile time but it is known that it will not grow after initilization. After calling the `init(size)` function, use the `set_X(index, elem)` function to add new items.
 
 DynamicSOA is, you guessed it, dynamically sized. Unlike FixedSizeSOA it can allocate more memory for itself if it runs out. Using DynamicSOA will generate a `push_X(index, elem)` function for each of your members, these must be used to add new elements so the SoaVector can keep track of it's size.
+
+MutableSOA works the same way as DynamicSOA in that it grows dynamically except it keeps a map of entity id -> sub vector index to prevent invalidating ids when erasing elements with the `erase(entity_id)`. This makes access slightly slower for MutableSOA members because it needs to do a hashmap lookup to figure out the actual index of the requested element, this still ends up being much faster than Aos access though. Note that by default this uses `std::unordered_map`, replacing this with some kind of array based hashmap that isn't stored in a linked list/tree would be much better but the stl doens't have one so I didn't include it. To use a different map type just replace the 3 MAP_ macros in soa.hpp.
 
 The SoaVector that each member is stored in satisfies the `std::ranges::contiguous_range` concept, meaning they can be used with almost all the `<ranges>` and `<algorithm>` methods. In particular [ranges](https://en.cppreference.com/w/cpp/ranges.html) has some nice methods that help make Soa layout easier by giving a way to query rows joined together using C++23 `views::zip` and `ranges::to`:
 ```cpp
