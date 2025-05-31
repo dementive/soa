@@ -43,11 +43,12 @@ For more examples check out the code in the `tests` directory.
 
 Doing Soa in C++ is a pain, some languages like [Zig](https://ziglang.org/documentation/master/std/#std.multi_array_list.MultiArrayList) and [Odin](https://odin-lang.org/docs/overview/#soa-data-types) have built in ways to make working with it much easier...C++ is not one of those languages.
 
-There seem to be 4 possible ways to go about solving this in C++:
+There seem to be 5 possible ways to go about solving this in C++:
 1. [Template stuff with tuples](https://github.com/crosetto/SoAvsAoS)
 2. [Generating the code outside of C++](https://marzer.github.io/soagen/)
 3. Using macros (this is what I do here)
 4. [In C++ 26 with reflection](https://brevzin.github.io/c++/2025/05/02/soa/#a-working-implementation)
+5. Just make every member a vector and use it as is.
 
 The core idea behind the macros is to send the type and name of every class member to a bunch of [recursive FOR_EACH macros](https://www.scs.stanford.edu/~dm/blog/va-opt.html) to generate all the boilerplate required. The generated boilerplate code includes getters and setters for each member, push for dynamic vectors, initilization, and deinitilization code.
 
@@ -93,7 +94,13 @@ auto first_sorted_pair = subrange_test[0];
 TEST("Sorting subrange: ", std::get<0>(first_sorted_pair) == 4 and std::get<1>(first_sorted_pair) == 8)
 ```
 
-Unfortunately (currently) there is no way to remove from either of these containers as ensuring that externally held IDs (indexes) don't get invalidated was very important to me. There is probably a way to do this by just storing a ID->index mapping on top of a DynamicSOA but I haven't gotten to it yet.
+## Caveats
+
+Making the macro interface nice to use comes with some downsides, kind of like how hamburgers taste good but might kill if you eat too many.
+
+When you run into compiler errors that originate from a recursive macro the error message might be bigger than your whole terminal scrollback limit filled with expand macros. These can be pretty jarring first time you see them but thankfully its easy to debug if you just read the error carefully like you would with a nasty template error.
+
+You also need to keep in mind how Soa actually works. If your access patterns necessitate getting every member of the object every time Soa will be significantly slower than Aos.
 
 ## Benchmark
 
